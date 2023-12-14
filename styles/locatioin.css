@@ -1,0 +1,10 @@
+/* Add this to your existing CSS or create a new CSS file */
+.location-marker {
+    background-color: #3498db;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #ffffff;
+    cursor: pointer;
+  }
+  
