@@ -4,18 +4,15 @@ import styles from "../styles/Home.module.css";
 import { useState, useEffect } from "react";
 import mapboxgl from "mapbox-gl";
 import * as turf from "@turf/turf";
-import Autosuggest from "react-autosuggest";
+import axios from "axios";
 
 export default function Home() {
   const [Map, setMap] = useState();
   const [pageIsMounted, setPageIsMounted] = useState(false);
-  const [fromValue, setFromValue] = useState("");
-  const [toValue, setToValue] = useState("");
-  const [fromSuggestions, setFromSuggestions] = useState([]);
-  const [toSuggestions, setToSuggestions] = useState([]);
+  const [seaRoutes, setSeaRoutes] = useState([]);
   const locations = [
     {
-      name: "Chennai",
+      name: "Mumbai",
       coordinates: [80.2785, 13.0878],
     },
     {
@@ -27,100 +24,7 @@ export default function Home() {
   mapboxgl.accessToken =
     "pk.eyJ1Ijoic3VyYWpzaW5naGJpc2h0IiwiYSI6ImNscTN1ajZmMDAwYWYyaWxvemJkeXh4bXcifQ.GVY_1nPPxmbhnCl_O_OnMg";
 
-  useEffect(() => {
-    setPageIsMounted(true);
-    const map = new mapboxgl.Map({
-      container: "map",
-      style: "mapbox://styles/mapbox/light-v10",
-      center: [80.2785, 13.0878], // New York coordinates
-      zoom: 4.5,
-    });
-
-    map.addControl(new mapboxgl.NavigationControl(), "top-right");
-    setMap(map);
-  }, []);
-
-  useEffect(() => {
-    if (pageIsMounted && Map) {
-      Map.on("load", () => {
-        // Call the function to add location markers
-        addLocationMarkers(locations);
-        // Call the function to add interconnected routes
-        addInterconnectedRoutes(locations);
-      });
-    }
-  }, [pageIsMounted, Map, locations]);
-
-  const getSuggestions = async (inputValue, type) => {
-    const inputLength = inputValue.trim().length;
-
-    // Simulated API endpoint
-    const apiUrl =
-      type === "source"
-        ? "https://jsonplaceholder.typicode.com/users"
-        : "https://jsonplaceholder.typicode.com/todos";
-    try {
-      const response = await fetch(apiUrl);
-      const data = await response.json();
-
-      // Return all suggestions when input length is 0
-      if (inputLength === 0) {
-        return data.map((item) => ({ label: item.name, value: item.id }));
-      }
-
-      // Filter and return suggestions based on input value
-      return data
-        .filter((item) =>
-          item.name.toLowerCase().includes(inputValue.toLowerCase())
-        )
-        .map((item) => ({ label: item.name, value: item.id }));
-    } catch (error) {
-      console.error("Error fetching suggestions:", error);
-      return [];
-    }
-  };
-
-  const renderSuggestion = (suggestion) => <div>{suggestion.label}</div>;
-
-  const onFromInputChange = (event, { newValue }) => {
-    setFromValue(newValue);
-  };
-
-  const onToInputChange = (event, { newValue }) => {
-    setToValue(newValue);
-  };
-
-  const onFromSuggestionsFetchRequested = ({ value }) => {
-    getSuggestions(value, "source").then((suggestions) => {
-      setFromSuggestions(suggestions);
-    });
-  };
-
-  const onToSuggestionsFetchRequested = ({ value }) => {
-    getSuggestions(value, "destination").then((suggestions) => {
-      setToSuggestions(suggestions);
-    });
-  };
-
-  const onFromSuggestionsClearRequested = () => {
-    setFromSuggestions([]);
-  };
-
-  const onToSuggestionsClearRequested = () => {
-    setToSuggestions([]);
-  };
-
-  const onFromSuggestionSelected = (event, { suggestion }) => {
-    setFromValue(suggestion.label);
-    // You can perform additional actions here, like updating the map based on the selected location
-  };
-
-  const onToSuggestionSelected = (event, { suggestion }) => {
-    setToValue(suggestion.label);
-    // You can perform additional actions here, like updating the map based on the selected location
-  };
-
-  // Add location markers
+  // Function to add location markers
   const addLocationMarkers = (locations) => {
     locations.forEach((location) => {
       const el = document.createElement("div");
@@ -136,10 +40,11 @@ export default function Home() {
     });
   };
 
-  // Add interconnected routes with curves
-  const addInterconnectedRoutes = (locations) => {
+  // Function to add interconnected routes with curves
+  const addInterconnectedRoutes = (locations, seaRoutes) => {
     const bounds = new mapboxgl.LngLatBounds();
 
+    // Add air route
     locations.forEach((location, i) => {
       const el = document.createElement("div");
       el.className = "location-marker";
@@ -152,77 +57,130 @@ export default function Home() {
         const start = location.coordinates;
         const end = locations[i + 1].coordinates;
 
-        // Use turf.lineIntersect to interpolate points along the air route
-        const airLine = turf.lineString([start, end]);
-        const curvedAirLine = turf.bezierSpline({
+        // Use turf.bezierSpline to create a curved line between two points
+        const curvedLine = turf.bezierSpline({
           type: "LineString",
           coordinates: [start, [start[0], end[1]], end],
         });
 
-        if (curvedAirLine && curvedAirLine.geometry.coordinates.length > 1) {
-          Map.addSource(`air-route-${i}`, {
+        if (curvedLine && curvedLine.geometry.coordinates.length > 1) {
+          Map.addSource(`route-${i}`, {
             type: "geojson",
             data: {
               type: "Feature",
               properties: {},
-              geometry: curvedAirLine.geometry,
+              geometry: curvedLine.geometry,
             },
           });
 
           Map.addLayer({
-            id: `air-route-${i}`,
+            id: `route-${i}`,
             type: "line",
-            source: `air-route-${i}`,
+            source: `route-${i}`,
             layout: { "line-join": "round", "line-cap": "round" },
-            paint: { "line-color": "green", "line-dasharray": [2, 2] },
+            paint: { "line-color": "red", "line-dasharray": [2, 2] },
           });
 
-          bounds.extend(curvedAirLine.geometry.coordinates);
+          bounds.extend(curvedLine.geometry.coordinates);
         } else {
           console.error(
-            `Error creating curved air line between locations ${i} and ${i + 1}`
+            `Error creating curved line between locations ${i} and ${i + 1}`
           );
         }
-
-        // Simulate waterway route (modify this part based on actual data)
-        const waterwayCoordinates = [
-          [start[0], start[1] - 1], // Slightly below the air route
-          [end[0], end[1] - 1], // Slightly below the air route
-        ];
-
-        Map.addSource(`waterway-route-${i}`, {
-          type: "geojson",
-          data: {
-            type: "Feature",
-            properties: {},
-            geometry: {
-              type: "LineString",
-              coordinates: waterwayCoordinates,
-            },
-          },
-        });
-
-        Map.addLayer({
-          id: `waterway-route-${i}`,
-          type: "line",
-          source: `waterway-route-${i}`,
-          layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "blue", "line-dasharray": [2, 2] },
-        });
-
-        bounds.extend(waterwayCoordinates);
       } else {
         bounds.extend(location.coordinates);
       }
     });
 
-    Map.fitBounds(bounds, { padding: 50, maxZoom: 5 });
+    // Add sea routes
+    seaRoutes.forEach((route, i) => {
+      const seaLine = turf.lineString(route.geometry.coordinates);
+
+      if (seaLine && seaLine.geometry.coordinates.length > 1) {
+        Map.addSource(`sea-route-${i}`, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: {},
+            geometry: seaLine.geometry,
+          },
+        });
+
+        Map.addLayer({
+          id: `sea-route-${i}`,
+          type: "line",
+          source: `sea-route-${i}`,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": "green", "line-dasharray": [2, 2] },
+        });
+
+        bounds.extend(seaLine.geometry.coordinates);
+      } else {
+        console.error(`Error creating sea route ${i}`);
+      }
+    });
+
+    Map.fitBounds(bounds, { padding: 50, maxZoom: 2 });
   };
+
+  // Function to fetch sea routes from SeaRoutes API
+  const fetchSeaRoutes = async () => {
+    const apiKey = "ZZYyGzqn536JL77jdcsnn2YKE9SFCz6v6d3Pgbwr";
+
+    const chennaiCoordinates = "80.2785,13.0878";
+    const newYorkCoordinates = "-74.006,40.7128";
+
+    const apiUrl = `https://api.searoutes.com/route/v2/sea/${chennaiCoordinates}%3B${newYorkCoordinates}?continuousCoordinates=true&allowIceAreas=false&avoidHRA=false&avoidSeca=false`;
+
+    try {
+      const response = await axios.get(apiUrl, {
+        headers: {
+          Accept: "application/json",
+          "x-api-key": apiKey,
+        },
+      });
+      return response.data.features;
+    } catch (error) {
+      console.error("Error fetching sea routes:", error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (pageIsMounted && Map) {
+      Map.on("load", async () => {
+        // Fetch sea routes data
+        const seaRoutesData = await fetchSeaRoutes();
+
+        if (seaRoutesData) {
+          setSeaRoutes(seaRoutesData);
+
+          // Call the function to add location markers
+          addLocationMarkers(locations);
+          // Call the function to add interconnected routes
+          addInterconnectedRoutes(locations, seaRoutesData);
+        }
+      });
+    }
+  }, [pageIsMounted, Map, locations]);
+
+  useEffect(() => {
+    setPageIsMounted(true);
+    const map = new mapboxgl.Map({
+      container: "map",
+      style: "mapbox://styles/mapbox/light-v10",
+      center: [80.2785, 13.0878], // Chennai coordinates
+      zoom: 4.5,
+    });
+
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+    setMap(map);
+  }, []);
 
   return (
     <div className={styles.container}>
       <Head>
-        <title>Mapbox Store Location</title>
+        <title>Mapbox Curved Route with Sea Routes</title>
         <meta name="description" content="Generated by create next app" />
         <link rel="icon" href="/favicon.ico" />
         <link
@@ -231,37 +189,6 @@ export default function Home() {
         />
       </Head>
       <main className={styles.main}>
-        <div className={styles.autoCard}>
-          {/* Autosuggest for "From" */}
-          <Autosuggest
-            suggestions={fromSuggestions}
-            onSuggestionsFetchRequested={onFromSuggestionsFetchRequested}
-            onSuggestionsClearRequested={onFromSuggestionsClearRequested}
-            getSuggestionValue={(suggestion) => suggestion.label}
-            renderSuggestion={renderSuggestion}
-            inputProps={{
-              placeholder: "From",
-              value: fromValue,
-              onChange: onFromInputChange,
-            }}
-            onSuggestionSelected={onFromSuggestionSelected}
-          />
-
-          {/* Autosuggest for "To" */}
-          <Autosuggest
-            suggestions={toSuggestions}
-            onSuggestionsFetchRequested={onToSuggestionsFetchRequested}
-            onSuggestionsClearRequested={onToSuggestionsClearRequested}
-            getSuggestionValue={(suggestion) => suggestion.label}
-            renderSuggestion={renderSuggestion}
-            inputProps={{
-              placeholder: "To",
-              value: toValue,
-              onChange: onToInputChange,
-            }}
-            onSuggestionSelected={onToSuggestionSelected}
-          />
-        </div>
         <div id="map" className="map"></div>
       </main>
       <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js"></script>
