@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 html,
 body {
   padding: 0;
@@ -6,14 +10,14 @@ body {
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
 }
 
-a {
+/* a {
   color: inherit;
   text-decoration: none;
 }
 
 * {
   box-sizing: border-box;
-}
+} */
 
 body {
   color: #404040;
@@ -39,8 +43,8 @@ body {
 
 .map {
   position: absolute;
-  left: 33.3333%;
-  width: 66.6666%;
+  left: 50.3333%;
+  width: 50.6666%;
   top: 0;
   bottom: 0;
 }
