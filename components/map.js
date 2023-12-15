@@ -124,7 +124,7 @@ const MapComponent = () => {
 
   // Function to fetch sea routes from SeaRoutes API
   const fetchSeaRoutes = async () => {
-    const apiKey = "C16U1FptSS9Y61fKe3jBC2hgd53ijcpoaGIIPLs0";
+    // const apiKey = "C16U1FptSS9Y61fKe3jBC2hgd53ijcpoaGIIPLs0";
 
     const chennaiCoordinates = "80.2785,13.0878";
     const newYorkCoordinates = "-74.006,40.7128";
